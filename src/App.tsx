@@ -245,12 +245,12 @@ export default function App() {
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="p-8 flex items-center gap-4 border-b border-slate-100">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+        <div className={`p-8 flex items-center gap-4 border-b border-slate-100 ${!isSidebarOpen ? 'justify-center' : ''}`}>
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex-shrink-0 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
             <SmilingStar size={24} />
           </div>
           {isSidebarOpen && (
-            <span className="font-black text-2xl tracking-tight text-slate-900">VACINA JÁ</span>
+            <span className="font-black text-2xl tracking-tight text-slate-900 truncate">VACINA JÁ</span>
           )}
         </div>
 
@@ -258,19 +258,31 @@ export default function App() {
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActivePage(item.id as Page)}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all group ${
+              onClick={() => {
+                setActivePage(item.id as Page);
+                if (window.innerWidth < 1024) setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center transition-all group relative ${
+                isSidebarOpen ? 'gap-4 p-4 rounded-2xl' : 'justify-center p-4 rounded-2xl'
+              } ${
                 activePage === item.id 
                   ? 'bg-blue-50 text-blue-600 font-bold shadow-sm' 
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
               }`}
+              title={!isSidebarOpen ? item.label : ''}
             >
-              <item.icon size={24} className={activePage === item.id ? item.color : 'text-slate-400 group-hover:text-slate-600'} />
-              {isSidebarOpen && <span>{item.label}</span>}
+              <item.icon size={26} className={`flex-shrink-0 ${activePage === item.id ? item.color : 'text-slate-400 group-hover:text-slate-600'}`} />
+              {isSidebarOpen && <span className="truncate">{item.label}</span>}
               {activePage === item.id && isSidebarOpen && (
                 <motion.div 
                   layoutId="active-pill"
-                  className={`ml-auto w-2 h-2 rounded-full ${item.color.replace('text-', 'bg-')}`}
+                  className={`ml-auto w-2 h-2 rounded-full flex-shrink-0 ${item.color.replace('text-', 'bg-')}`}
+                />
+              )}
+              {!isSidebarOpen && activePage === item.id && (
+                <motion.div 
+                  layoutId="active-pill-collapsed"
+                  className="absolute left-0 w-1 h-8 bg-blue-600 rounded-r-full"
                 />
               )}
             </button>
@@ -280,14 +292,20 @@ export default function App() {
         <div className="p-6 border-t border-slate-100 space-y-3">
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-4 p-4 text-rose-500 hover:bg-rose-50 rounded-2xl transition-all font-bold"
+            className={`w-full flex items-center transition-all font-bold text-rose-500 hover:bg-rose-50 rounded-2xl ${
+              isSidebarOpen ? 'gap-4 p-4' : 'justify-center p-4'
+            }`}
+            title={!isSidebarOpen ? 'Sair do Sistema' : ''}
           >
-            <LogOut size={24} />
-            {isSidebarOpen && <span>Sair do Sistema</span>}
+            <LogOut size={26} className="flex-shrink-0" />
+            {isSidebarOpen && <span className="truncate">Sair do Sistema</span>}
           </button>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-full flex items-center gap-4 p-4 text-slate-400 hover:text-slate-900 transition-all"
+            className={`w-full flex items-center transition-all text-slate-400 hover:text-slate-900 ${
+              isSidebarOpen ? 'gap-4 p-4' : 'justify-center p-4'
+            }`}
+            title={!isSidebarOpen ? 'Expandir Menu' : 'Recolher Menu'}
           >
             {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
             {isSidebarOpen && <span className="font-medium">Recolher Menu</span>}

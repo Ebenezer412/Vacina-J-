@@ -19,7 +19,32 @@ db.exec(`
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     role TEXT CHECK(role IN ('admin', 'enfermeiro')) DEFAULT 'enfermeiro',
-    nome_completo TEXT NOT NULL
+    nome_completo TEXT NOT NULL,
+    email TEXT,
+    activated BOOLEAN DEFAULT 1,
+    profile_picture TEXT,
+    temporary_password TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    read BOOLEAN DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS agendamentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    paciente_id INTEGER,
+    vacina_id INTEGER,
+    data_agendada DATE NOT NULL,
+    hora_agendada TIME,
+    status TEXT CHECK(status IN ('pendente', 'concluido', 'cancelado')) DEFAULT 'pendente',
+    FOREIGN KEY (paciente_id) REFERENCES pacientes(id),
+    FOREIGN KEY (vacina_id) REFERENCES vacinas(id)
   );
 
   CREATE TABLE IF NOT EXISTS pacientes (
@@ -154,12 +179,56 @@ async function startServer() {
   // Auth API
   app.post("/api/auth/login", (req, res) => {
     const { username, password } = req.body;
-    const user = db.prepare("SELECT id, username, role, nome_completo FROM users WHERE username = ? AND password = ?").get(username, password) as any;
+    const user = db.prepare("SELECT * FROM users WHERE username = ? AND password = ?").get(username, password) as any;
     if (user) {
+      if (!user.activated && user.temporary_password !== password) {
+         return res.status(403).json({ error: "Conta não ativada. Use o Primeiro Acesso." });
+      }
       logAction(user.id, "LOGIN", "users", user.id);
-      res.json(user);
+      const { password: _, temporary_password: __, ...userWithoutPass } = user;
+      res.json(userWithoutPass);
     } else {
       res.status(401).json({ error: "Credenciais inválidas" });
+    }
+  });
+
+  app.post("/api/auth/first-access", (req, res) => {
+    const { username, tempPassword, newPassword } = req.body;
+    const user = db.prepare("SELECT * FROM users WHERE username = ? AND (password = ? OR temporary_password = ?)").get(username, tempPassword, tempPassword) as any;
+    
+    if (user) {
+      db.prepare("UPDATE users SET password = ?, temporary_password = NULL, activated = 1 WHERE id = ?").run(newPassword, user.id);
+      logAction(user.id, "FIRST_ACCESS_ACTIVATE", "users", user.id);
+      const { password: _, temporary_password: __, ...userWithoutPass } = user;
+      res.json({ ...userWithoutPass, activated: 1 });
+    } else {
+      res.status(401).json({ error: "Credenciais temporárias inválidas" });
+    }
+  });
+
+  app.post("/api/auth/forgot-password", (req, res) => {
+    const { email } = req.body;
+    const user = db.prepare("SELECT id FROM users WHERE email = ?").get(email) as any;
+    if (user) {
+      const newTempPass = Math.random().toString(36).slice(-8);
+      db.prepare("UPDATE users SET temporary_password = ? WHERE id = ?").run(newTempPass, user.id);
+      // In a real app, send email here.
+      res.json({ success: true, message: "Email enviado com sucesso (Simulado)", tempPass: newTempPass });
+    } else {
+      res.status(404).json({ error: "Email não encontrado" });
+    }
+  });
+
+  app.post("/api/auth/register", (req, res) => {
+    const { username, password, nome_completo, email } = req.body;
+    try {
+      const info = db.prepare(`
+        INSERT INTO users (username, password, role, nome_completo, email, activated)
+        VALUES (?, ?, 'enfermeiro', ?, ?, 1)
+      `).run(username, password, nome_completo, email);
+      res.json({ id: info.lastInsertRowid });
+    } catch (e: any) {
+      res.status(400).json({ error: "Utilizador ou email já existe" });
     }
   });
 
@@ -202,10 +271,58 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/users/:id", (req, res) => {
+  app.get("/api/users/profile/:id", (req, res) => {
+    const user = db.prepare("SELECT id, username, role, nome_completo, email, profile_picture FROM users WHERE id = ?").get(req.params.id);
+    if (user) res.json(user);
+    else res.status(404).json({ error: "Usuário não encontrado" });
+  });
+
+  app.put("/api/users/profile/:id", (req, res) => {
+    const { nome_completo, email, profile_picture, password } = req.body;
     try {
-      db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+      if (password) {
+        db.prepare("UPDATE users SET nome_completo = ?, email = ?, profile_picture = ?, password = ? WHERE id = ?")
+          .run(nome_completo, email, profile_picture, password, req.params.id);
+      } else {
+        db.prepare("UPDATE users SET nome_completo = ?, email = ?, profile_picture = ? WHERE id = ?")
+          .run(nome_completo, email, profile_picture, req.params.id);
+      }
       res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  // Notifications API
+  app.get("/api/notifications/:userId", (req, res) => {
+    const notifications = db.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20").all(req.params.userId);
+    res.json(notifications);
+  });
+
+  app.put("/api/notifications/read/:id", (req, res) => {
+    db.prepare("UPDATE notifications SET read = 1 WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
+  // Appointments (Agendamentos) API
+  app.get("/api/agendamentos/today", (req, res) => {
+    const appointments = db.prepare(`
+      SELECT a.*, p.nome as paciente_nome, v.nome as vacina_nome
+      FROM agendamentos a
+      JOIN pacientes p ON a.paciente_id = p.id
+      JOIN vacinas v ON a.vacina_id = v.id
+      WHERE a.data_agendada = date('now') AND a.status = 'pendente'
+      ORDER BY a.hora_agendada ASC
+    `).all();
+    res.json(appointments);
+  });
+
+  app.post("/api/agendamentos", (req, res) => {
+    const { paciente_id, vacina_id, data_agendada, hora_agendada } = req.body;
+    try {
+      const info = db.prepare("INSERT INTO agendamentos (paciente_id, vacina_id, data_agendada, hora_agendada) VALUES (?, ?, ?, ?)")
+        .run(paciente_id, vacina_id, data_agendada, hora_agendada);
+      res.json({ id: info.lastInsertRowid });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }

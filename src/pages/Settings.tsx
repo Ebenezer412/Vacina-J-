@@ -135,17 +135,17 @@ export default function Settings() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-[32px] lg:rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+              <div className="p-6 lg:p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 flex-shrink-0">
+                <h2 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight uppercase">
                   {editingUser ? 'Editar Utilizador' : 'Novo Utilizador'}
                 </h2>
                 <button onClick={() => setShowAddForm(false)} className="w-10 h-10 flex items-center justify-center bg-white rounded-xl text-slate-400 hover:text-slate-900 transition-all shadow-sm">
                   <X size={24} />
                 </button>
               </div>
-              <form className="p-10 space-y-6" onSubmit={async (e) => {
+              <form className="p-6 lg:p-10 space-y-6 overflow-y-auto" onSubmit={async (e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
                 const data = Object.fromEntries(formData.entries());

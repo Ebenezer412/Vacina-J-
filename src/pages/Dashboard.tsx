@@ -29,19 +29,23 @@ interface OpenVial {
 export default function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
   const [stats, setStats] = useState<Stats>({ dosesHoje: 0, pacientesHoje: 0, frascosAbertos: 0, alertasPendentes: 0 });
   const [openVials, setOpenVials] = useState<OpenVial[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [statsRes, vialsRes] = await Promise.all([
+        const [statsRes, vialsRes, appointmentsRes] = await Promise.all([
           fetch('/api/dashboard/stats'),
-          fetch('/api/stock/abertos')
+          fetch('/api/stock/abertos'),
+          fetch('/api/agendamentos/today')
         ]);
         const statsData = await statsRes.json();
         const vialsData = await vialsRes.json();
+        const appointmentsData = await appointmentsRes.json();
         setStats(statsData);
         setOpenVials(vialsData);
+        setAppointments(appointmentsData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -118,9 +122,51 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: any) => v
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Section */}
         <div className="lg:col-span-2 space-y-8">
+          {/* Appointments Section */}
           <div className="card">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">Lista do Dia</h2>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Pacientes Previstos para Hoje</h2>
+              <div className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                {appointments.length} Agendados
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {appointments.length === 0 ? (
+                <div className="flex items-center justify-center py-12 text-slate-400 flex-col gap-4 bg-slate-50/50 rounded-[32px] border-2 border-dashed border-slate-200">
+                  <p className="font-medium">Nenhum agendamento para hoje</p>
+                </div>
+              ) : (
+                appointments.map((appt) => (
+                  <div key={appt.id} className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-3xl hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                        <Clock size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-900">{appt.paciente_nome}</h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{appt.hora_agendada}</span>
+                          <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">• {appt.vacina_nome}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => onNavigate('vaccinate')}
+                      className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Daily List Section */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Lista do Dia</h2>
               <button 
                 onClick={() => onNavigate('vaccinate')}
                 className="text-blue-600 text-sm font-bold hover:underline flex items-center gap-1"
@@ -134,7 +180,7 @@ export default function Dashboard({ onNavigate }: { onNavigate: (page: any) => v
                 <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm">
                   <Users size={40} strokeWidth={1} className="text-slate-300" />
                 </div>
-                <p className="font-medium">Nenhum paciente previsto para hoje</p>
+                <p className="font-medium">Nenhum paciente vacinado hoje</p>
                 <button 
                   onClick={() => onNavigate('vaccinate')}
                   className="btn-primary mt-2"
